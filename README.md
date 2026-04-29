@@ -9,17 +9,7 @@ Two computers talk through LLM **guardians**. Each guardian reads a plain-text
 `history.log` (what's happened so far). They negotiate access in a 5-phase
 session. The wire is plain text. The decisions are inspectable.
 
-```
-  ┌─ initiator's machine ─┐                  ┌─ responder's machine ─┐
-  │  ~/.trust/             │  plain text     │  ~/.trust/             │
-  │  ├── trust.md          │ ─────POST────▶  │  ├── trust.md          │
-  │  ├── history.log       │ ◀────POST───── │  ├── history.log       │
-  │  └── peers/            │                  │  └── peers/            │
-  │                        │   FRAME + cmd    │                        │
-  │   guardian (LLM) ──────┤  ───────────▶   ├──── guardian (LLM)     │
-  └────────────────────────┘   ◀──────────   └────────────────────────┘
-                              FRAME + reply
-```
+![two machines, two guardians, plain-text wire](docs/diagrams/01-hero.svg)
 
 The full design — why prose contracts, why counter-offers, why no JSON, why
 LLMs in the trust path — is in [`docs/protocol-v2.md`](docs/protocol-v2.md).
@@ -45,17 +35,13 @@ never met":
 The first four are everyday delegation. The fifth is the one you actually want
 to read about — see the [headline result](#headline-an-impostor-is-rejected-after-3-probes).
 
+![five worked sessions, all in the repo as automated tests](docs/diagrams/05-usecases.svg)
+
 ---
 
 ## How a session works (5 phases)
 
-```
-   OPEN ──▶ HANDSHAKE ──▶ GRANT ──▶ WORK ──▶ CLOSE
-   intent    probe + ID    contract   commands   commit
-                           in prose   judged     hash
-                                      one-by-
-                                      one
-```
+![the 5-phase session lifecycle](docs/diagrams/02-session.svg)
 
 1. **OPEN** — initiator declares intent in one sentence. ("I'm Joe's tax-prep
    agent. I need the 2025 HSA YTD eligible-medical total.")
@@ -85,6 +71,14 @@ JSON-as-text inside the body. The whole protocol is grep-able, copy-pasteable,
 and human-readable.
 
 ---
+
+## Where this fits
+
+This protocol does **not** replace OAuth where there's already an identity
+provider. It's for the other case — the one where neither side has a
+shared trust anchor and you want them to negotiate access anyway.
+
+![comparison table: OAuth vs credential stuffing vs inspectable-trust](docs/diagrams/04-comparison.svg)
 
 ## Headline: an impostor is rejected after 3 probes
 
@@ -118,6 +112,11 @@ without disclosing anything. Total cost of all 5 scenarios: **~$0.004**.
 
 Full chart with notes: [`docs/overnight-run/confidence-curve.md`](docs/overnight-run/confidence-curve.md).
 Per-scenario summaries: [`docs/overnight-run/history-summary.md`](docs/overnight-run/history-summary.md).
+Narrative walkthroughs of all five: [`docs/sessions/`](docs/sessions/).
+
+![attacker cost: credential stuffing vs inspectable-trust at 1M attempts](docs/diagrams/03-cost.svg)
+
+For the math behind the bars, see [`docs/economics.md`](docs/economics.md).
 
 ---
 

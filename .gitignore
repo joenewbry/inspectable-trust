@@ -4,6 +4,8 @@ dist/
 .env.*
 *.log
 .trust-test-*
-sessions/
-overnight-run/transcripts/
+.trust/sessions/
+.trust/jobs/
+examples/**/.trust/sessions/
+examples/**/.trust/jobs/
 

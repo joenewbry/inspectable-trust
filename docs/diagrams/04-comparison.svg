@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 380" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12">
+  <style>
+    .box { fill: #fff; stroke: #111; stroke-width: 1.5; }
+    .lbl { fill: #111; }
+    .dim { fill: #555; }
+    .header { fill: #111; font-weight: 600; }
+    .title { font-size: 16px; font-weight: 600; }
+    .row-alt { fill: #f6f6f6; }
+  </style>
+  <rect width="820" height="380" fill="#fff"/>
+  <text class="title" x="410" y="34" text-anchor="middle">where this fits next to existing approaches</text>
+
+  <!-- Header row -->
+  <rect class="box" x="30" y="60" width="220" height="40"/>
+  <rect class="box" x="250" y="60" width="190" height="40"/>
+  <rect class="box" x="440" y="60" width="190" height="40"/>
+  <rect class="box" x="630" y="60" width="160" height="40"/>
+  <text class="header" x="140" y="86" text-anchor="middle">property</text>
+  <text class="header" x="345" y="86" text-anchor="middle">OAuth / SSO</text>
+  <text class="header" x="535" y="86" text-anchor="middle">credential stuffing</text>
+  <text class="header" x="710" y="86" text-anchor="middle">inspectable-trust</text>
+
+  <!-- Row 1 -->
+  <rect class="row-alt" x="30" y="100" width="760" height="40"/>
+  <rect class="box" x="30" y="100" width="220" height="40" fill="none"/>
+  <rect class="box" x="250" y="100" width="190" height="40" fill="none"/>
+  <rect class="box" x="440" y="100" width="190" height="40" fill="none"/>
+  <rect class="box" x="630" y="100" width="160" height="40" fill="none"/>
+  <text class="lbl" x="40" y="125">prior shared trust</text>
+  <text class="lbl" x="345" y="125" text-anchor="middle">required</text>
+  <text class="lbl" x="535" y="125" text-anchor="middle">required (the password)</text>
+  <text class="lbl" x="710" y="125" text-anchor="middle">not required</text>
+
+  <!-- Row 2 -->
+  <rect class="box" x="30" y="140" width="220" height="40"/>
+  <rect class="box" x="250" y="140" width="190" height="40"/>
+  <rect class="box" x="440" y="140" width="190" height="40"/>
+  <rect class="box" x="630" y="140" width="160" height="40"/>
+  <text class="lbl" x="40" y="165">central authority</text>
+  <text class="lbl" x="345" y="165" text-anchor="middle">yes (the IdP)</text>
+  <text class="lbl" x="535" y="165" text-anchor="middle">no</text>
+  <text class="lbl" x="710" y="165" text-anchor="middle">no</text>
+
+  <!-- Row 3 -->
+  <rect class="row-alt" x="30" y="180" width="760" height="40"/>
+  <rect class="box" x="30" y="180" width="220" height="40" fill="none"/>
+  <rect class="box" x="250" y="180" width="190" height="40" fill="none"/>
+  <rect class="box" x="440" y="180" width="190" height="40" fill="none"/>
+  <rect class="box" x="630" y="180" width="160" height="40" fill="none"/>
+  <text class="lbl" x="40" y="205">decision in plain prose</text>
+  <text class="lbl" x="345" y="205" text-anchor="middle">no (scopes)</text>
+  <text class="lbl" x="535" y="205" text-anchor="middle">n/a</text>
+  <text class="lbl" x="710" y="205" text-anchor="middle">yes (contract.md)</text>
+
+  <!-- Row 4 -->
+  <rect class="box" x="30" y="220" width="220" height="40"/>
+  <rect class="box" x="250" y="220" width="190" height="40"/>
+  <rect class="box" x="440" y="220" width="190" height="40"/>
+  <rect class="box" x="630" y="220" width="160" height="40"/>
+  <text class="lbl" x="40" y="245">counter-offer responses</text>
+  <text class="lbl" x="345" y="245" text-anchor="middle">no</text>
+  <text class="lbl" x="535" y="245" text-anchor="middle">n/a</text>
+  <text class="lbl" x="710" y="245" text-anchor="middle">yes</text>
+
+  <!-- Row 5 -->
+  <rect class="row-alt" x="30" y="260" width="760" height="40"/>
+  <rect class="box" x="30" y="260" width="220" height="40" fill="none"/>
+  <rect class="box" x="250" y="260" width="190" height="40" fill="none"/>
+  <rect class="box" x="440" y="260" width="190" height="40" fill="none"/>
+  <rect class="box" x="630" y="260" width="160" height="40" fill="none"/>
+  <text class="lbl" x="40" y="285">attacker $/identity</text>
+  <text class="lbl" x="345" y="285" text-anchor="middle">low (phishing IdP)</text>
+  <text class="lbl" x="535" y="285" text-anchor="middle">~$0.001</text>
+  <text class="lbl" x="710" y="285" text-anchor="middle">$0.005 – $0.016</text>
+
+  <!-- Row 6 -->
+  <rect class="box" x="30" y="300" width="220" height="40"/>
+  <rect class="box" x="250" y="300" width="190" height="40"/>
+  <rect class="box" x="440" y="300" width="190" height="40"/>
+  <rect class="box" x="630" y="300" width="160" height="40"/>
+  <text class="lbl" x="40" y="325">transcript inspectable</text>
+  <text class="lbl" x="345" y="325" text-anchor="middle">opaque tokens</text>
+  <text class="lbl" x="535" y="325" text-anchor="middle">n/a</text>
+  <text class="lbl" x="710" y="325" text-anchor="middle">plain text</text>
+
+  <text class="dim" x="410" y="362" text-anchor="middle" font-size="11">these are complementary, not competing — use OAuth where there's already an IdP; this is for everyone else</text>
+</svg>

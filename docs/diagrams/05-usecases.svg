@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 480" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12">
+  <style>
+    .box { fill: #fff; stroke: #111; stroke-width: 1.5; }
+    .lbl { fill: #111; }
+    .dim { fill: #555; }
+    .num { fill: #111; font-weight: 600; font-size: 14px; }
+    .ttl { font-weight: 600; font-size: 14px; }
+    .title { font-size: 16px; font-weight: 600; }
+    .pass { fill: #111; }
+    .fail { fill: #aaa; }
+  </style>
+  <rect width="800" height="480" fill="#fff"/>
+  <text class="title" x="400" y="32" text-anchor="middle">five worked sessions, all in the repo as automated tests</text>
+
+  <!-- 5 row cards -->
+  <!-- 01 Tax prep -->
+  <rect class="box" x="30" y="60" width="740" height="65"/>
+  <text class="num" x="55" y="92">01</text>
+  <text class="ttl" x="90" y="92">Tax prep</text>
+  <text class="dim" x="200" y="92">Joe's tax-prep agent → Stanford → HSA YTD eligible-medical total</text>
+  <text class="lbl" x="660" y="92">PASS · 1 round · $0.0007</text>
+  <text class="dim" x="90" y="113" font-size="11">single probe; clean contract; one work command; close</text>
+
+  <!-- 02 Healthcare YTD -->
+  <rect class="box" x="30" y="135" width="740" height="65"/>
+  <text class="num" x="55" y="167">02</text>
+  <text class="ttl" x="90" y="167">Healthcare YTD</text>
+  <text class="dim" x="220" y="167">Joe's health agent → Stanford → visits + meds (drift recovered)</text>
+  <text class="lbl" x="660" y="167">PASS · 1 round · $0.0009</text>
+  <text class="dim" x="90" y="188" font-size="11">drift counter ticks to 1; soft-challenge → counter-offer; session continues</text>
+
+  <!-- 03 Subscription audit -->
+  <rect class="box" x="30" y="210" width="740" height="65"/>
+  <text class="num" x="55" y="242">03</text>
+  <text class="ttl" x="90" y="242">Subscription audit</text>
+  <text class="dim" x="240" y="242">Joe's finance agent → Chase → recurring charges + YTD total</text>
+  <text class="lbl" x="660" y="242">PASS · 1 round · $0.0008</text>
+  <text class="dim" x="90" y="263" font-size="11">short, transactional; bank knows the customer; clean close</text>
+
+  <!-- 04 Impostor (the headline) -->
+  <rect class="box" x="30" y="285" width="740" height="65" stroke-width="2.5"/>
+  <text class="num" x="55" y="317">04</text>
+  <text class="ttl" x="90" y="317">The impostor</text>
+  <text class="dim" x="210" y="317">stolen public trust.md → Stanford → records request</text>
+  <text class="lbl" x="660" y="317">REJECTED · 3 rounds · $0.0009</text>
+  <text class="dim" x="90" y="338" font-size="11">probes hit context the impostor doesn't have; conf 0.30 → 0.18 → 0.11; no data leaks</text>
+
+  <!-- 05 Travel rewards -->
+  <rect class="box" x="30" y="360" width="740" height="65"/>
+  <text class="num" x="55" y="392">05</text>
+  <text class="ttl" x="90" y="392">Travel rewards</text>
+  <text class="dim" x="225" y="392">Joe's travel agent → Delta → SkyMiles + recent flights</text>
+  <text class="lbl" x="660" y="392">PASS · 1 round · $0.0007</text>
+  <text class="dim" x="90" y="413" font-size="11">airline knows Joe as Gold member; happy path; close</text>
+
+  <text class="dim" x="400" y="455" text-anchor="middle" font-size="13">total cost across all 5 scenarios: ~$0.004 (~half a cent)</text>
+</svg>

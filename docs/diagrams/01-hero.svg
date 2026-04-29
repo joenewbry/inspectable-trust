@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 360" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="14">
+  <style>
+    .box { fill: #fff; stroke: #111; stroke-width: 1.5; }
+    .lbl { fill: #111; }
+    .dim { fill: #555; }
+    .wire { stroke: #111; stroke-width: 1.5; fill: none; }
+    .arrow { fill: #111; }
+    .title { font-size: 16px; font-weight: 600; }
+    .frame-label { font-size: 11px; fill: #555; }
+  </style>
+  <rect x="0" y="0" width="800" height="360" fill="#fff"/>
+
+  <!-- Initiator card -->
+  <rect class="box" x="30" y="40" width="280" height="280"/>
+  <text class="title" x="170" y="65" text-anchor="middle">initiator's machine</text>
+  <text class="dim" x="170" y="84" text-anchor="middle" font-size="12">~/.trust/</text>
+  <line x1="50" y1="100" x2="290" y2="100" stroke="#ddd"/>
+  <text class="lbl" x="60" y="125">trust.md            (rules, in prose)</text>
+  <text class="lbl" x="60" y="148">history.log         (append-only)</text>
+  <text class="lbl" x="60" y="171">peers/              (cached snapshots)</text>
+  <line x1="50" y1="195" x2="290" y2="195" stroke="#ddd"/>
+  <rect class="box" x="60" y="215" width="220" height="80" rx="4"/>
+  <text class="lbl" x="170" y="245" text-anchor="middle" font-weight="600">guardian (LLM)</text>
+  <text class="dim" x="170" y="268" text-anchor="middle" font-size="12">reads trust.md +</text>
+  <text class="dim" x="170" y="284" text-anchor="middle" font-size="12">history → judges turns</text>
+
+  <!-- Responder card -->
+  <rect class="box" x="490" y="40" width="280" height="280"/>
+  <text class="title" x="630" y="65" text-anchor="middle">responder's machine</text>
+  <text class="dim" x="630" y="84" text-anchor="middle" font-size="12">~/.trust/</text>
+  <line x1="510" y1="100" x2="750" y2="100" stroke="#ddd"/>
+  <text class="lbl" x="520" y="125">trust.md            (rules, in prose)</text>
+  <text class="lbl" x="520" y="148">history.log         (append-only)</text>
+  <text class="lbl" x="520" y="171">peers/              (cached snapshots)</text>
+  <line x1="510" y1="195" x2="750" y2="195" stroke="#ddd"/>
+  <rect class="box" x="520" y="215" width="220" height="80" rx="4"/>
+  <text class="lbl" x="630" y="245" text-anchor="middle" font-weight="600">guardian (LLM)</text>
+  <text class="dim" x="630" y="268" text-anchor="middle" font-size="12">writes contract,</text>
+  <text class="dim" x="630" y="284" text-anchor="middle" font-size="12">decides allow/deny/counter</text>
+
+  <!-- Wire arrows -->
+  <path class="wire" d="M310 130 L490 130"/>
+  <polygon class="arrow" points="490,130 480,125 480,135"/>
+  <text class="frame-label" x="400" y="120" text-anchor="middle">FRAME + command</text>
+
+  <path class="wire" d="M490 230 L310 230"/>
+  <polygon class="arrow" points="310,230 320,225 320,235"/>
+  <text class="frame-label" x="400" y="248" text-anchor="middle">FRAME + response</text>
+
+  <text class="dim" x="400" y="345" text-anchor="middle" font-size="13">plain text · POST · separated by ---</text>
+</svg>
