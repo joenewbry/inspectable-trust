@@ -1,0 +1,36 @@
+{
+  "name": "inspectable-trust",
+  "version": "0.1.0",
+  "description": "A protocol for letting a stranger's machine ask your machine questions — without prior credentials, without a central authority.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Joe Newbry",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joenewbry/inspectable-trust.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "trust": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run tests/unit",
+    "test:watch": "vitest tests/unit",
+    "test:integration": "vitest run tests/integration --testTimeout=60000",
+    "test:scenarios": "vitest run tests/scenarios --testTimeout=180000",
+    "demo": "tsx examples/demo.ts",
+    "trust": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.91.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}
