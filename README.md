@@ -288,6 +288,7 @@ inspectable-trust/
 - ✅ Two-daemon localhost demo with real LLM
 - ✅ 60 unit tests + 3 integration tests + 5 scenario tests, all passing
 - ✅ Provider-agnostic: works on Anthropic Haiku 4.5 or OpenAI gpt-4.1-nano
+- ✅ Cross-machine deploy verified on a Jetson Orin Nano (Mac initiator, Jetson responder) — see [`docs/deploy-jetson.md`](docs/deploy-jetson.md)
 - ⏳ Cross-language client (planned for v0.2 to prove protocol portability)
 - ⏳ Transport security (Noise / mTLS / Tor — see the privacy-dial discussion in protocol-v2.md)
 - ⏳ Vouch chains across peer introductions (single-hop only today)
