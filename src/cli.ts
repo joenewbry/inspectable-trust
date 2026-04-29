@@ -50,6 +50,17 @@ async function main() {
   }
 }
 
+function hasGuardianKey() {
+  const provider = env.TRUST_PROVIDER ?? "anthropic";
+  return provider === "openai" ? !!env.OPENAI_API_KEY : !!env.ANTHROPIC_API_KEY;
+}
+
+function missingKeyMessage() {
+  const provider = env.TRUST_PROVIDER ?? "anthropic";
+  const which = provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+  return `${which} not set in environment (provider: ${provider}).\n`;
+}
+
 function help() {
   stdout.write(`trust — inspectable-trust CLI
 
@@ -98,8 +109,8 @@ function cmdInit(rawPath?: string) {
 }
 
 function cmdServe(args: string[]) {
-  if (!env.ANTHROPIC_API_KEY) {
-    stderr.write("ANTHROPIC_API_KEY not set in environment.\n");
+  if (!hasGuardianKey()) {
+    stderr.write(missingKeyMessage());
     exit(1);
   }
   let root: string | undefined;
@@ -130,8 +141,8 @@ function cmdServe(args: string[]) {
 }
 
 async function cmdAsk(args: string[]) {
-  if (!env.ANTHROPIC_API_KEY) {
-    stderr.write("ANTHROPIC_API_KEY not set.\n");
+  if (!hasGuardianKey()) {
+    stderr.write(missingKeyMessage());
     exit(1);
   }
   if (args.length < 2) {
