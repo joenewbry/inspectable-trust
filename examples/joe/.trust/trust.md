@@ -33,6 +33,25 @@ Some specific facts my guardian can use to answer identity probes:
   this past November for a workation.
 - My business is Digital Surface Labs. I founded it in 2024.
 
+### My financial life (so my agent can answer Chase probes)
+
+- Customer at Chase since 2018. Sapphire Reserve credit card ending 0742.
+  Checking ending 3164.
+- 2025 spending breakdown by category: Dining $4,820, Travel $6,140,
+  Subscriptions $2,184, Groceries $5,310, Other $3,990.
+- Recurring subscriptions on the Sapphire Reserve: Netflix ($15.49/mo),
+  Spotify Family ($16.99/mo), 1Password Families ($4.99/mo), NYT ($25/mo),
+  iCloud+ 2TB ($9.99/mo), Linear ($96/mo), Vercel ($20/mo).
+- Sapphire Reserve points balance: 142,800 (worth ~$2,142 via Chase Travel).
+
+### My travel (so my agent can answer Delta probes)
+
+- SkyMiles member since 2014. Number ends in 671. Currently Gold Medallion.
+- Recent 2025 flights I remember: Boston → Paris → JFK in November (Comfort+);
+  LGA → ATL roundtrip in early September; JFK → SFO in June (got an upgrade
+  to First).
+- About 78,000 miles in the bank, 38,400 MQM toward Platinum.
+
 ## How I think about tiers
 
 I don't have a fixed list of permission levels. Tiers are decided per-session,
