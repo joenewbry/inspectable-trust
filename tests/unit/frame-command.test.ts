@@ -41,14 +41,18 @@ describe("decode error handling", () => {
     expect(() => decode("FRAME: hi\nCOMMAND: ls")).toThrow(/delimiter/i);
   });
 
-  it("throws on missing FRAME label", () => {
-    expect(() => decode("hi\n---\nCOMMAND: ls")).toThrow(/FRAME/);
+  it("v0.2 lenience: missing FRAME label uses entire pre-delimiter text as frame", () => {
+    const m = decode("the intent\n---\nCOMMAND: ls");
+    expect(m.frame).toBe("the intent");
+    expect(m.body).toBe("ls");
+    expect(m.bodyKind).toBe("command");
   });
 
-  it("throws on missing body label", () => {
-    expect(() => decode("FRAME: hi\n---\njust some text")).toThrow(
-      /COMMAND.*RESPONSE/,
-    );
+  it("v0.2 lenience: missing body label defaults to bodyKind=command", () => {
+    const m = decode("FRAME: hi\n---\njust some text");
+    expect(m.frame).toBe("hi");
+    expect(m.body).toBe("just some text");
+    expect(m.bodyKind).toBe("command");
   });
 });
 

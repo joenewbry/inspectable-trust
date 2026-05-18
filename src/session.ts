@@ -34,6 +34,10 @@ import {
 } from "./work-loop.js";
 import { appendEntry } from "./history.js";
 import { addStrike, loadPeer, recordSuccessfulInteraction } from "./peers.js";
+import { executeShell, formatExecResult, looksLikeShell, looksLikeSql } from "./exec.js";
+import { formatRows, type ProdDb } from "./prod-db.js";
+import { redact, type RedactionContext } from "./redaction.js";
+import { sealSession } from "./seal.js";
 
 export interface SessionStepResult {
   /** True iff the session is finished after this step. */
@@ -49,9 +53,43 @@ export interface ResponderSessionConfig {
   manifest: TrustManifest;
   guardian: GuardianClient;
   handshake?: { maxRounds: number; passThreshold: number; abortThreshold: number };
+  /**
+   * Directory for runtime state (sessions/, audit/, history.log). Defaults to
+   * trustDir when omitted. Split out for deployments where the policy file
+   * (trust.md) lives in a release directory that rotates under your feet.
+   */
+  stateDir?: string;
+  /**
+   * When true, the OPEN → HANDSHAKE phase is skipped — the responder goes
+   * straight from OPEN to GRANT and writes a contract using the intent
+   * alone. Intended for permissionless public endpoints whose policy is
+   * "anyone may connect; the contract is what bounds the session".
+   */
+  skipHandshake?: boolean;
+  /**
+   * When set, every WORK-phase response is rewritten by the PII shield. On
+   * session close, the per-session aliases.md is age-encrypted and moved to
+   * `auditRoot`.
+   */
+  redaction?: {
+    /** Path to recipients.txt with one or more age public keys. */
+    recipientsPath: string;
+    /** Audit dir root (defaults to <stateDir>/audit). */
+    auditRoot?: string;
+    /** Override the age binary path (test seam). */
+    ageBin?: string;
+  };
+  /** Optional ProdDb for SQL turns. When unset, SQL is rejected. */
+  prodDb?: ProdDb;
+  /** Working directory for shell exec. Defaults to process.cwd(). */
+  shellCwd?: string;
 }
 
 const DEFAULT_RESP_HS = { maxRounds: 4, passThreshold: 0.7, abortThreshold: 0.2 };
+
+function stateRoot(cfg: ResponderSessionConfig): string {
+  return cfg.stateDir ?? cfg.trustDir;
+}
 
 export class ResponderSession {
   readonly id = randomUUID();
@@ -67,6 +105,10 @@ export class ResponderSession {
   contractRaw?: string;
   drift: DriftState = newDriftState();
   cost = 0;
+  /** 1-based counter of WORK turns processed (for redaction context). */
+  turnNumber = 0;
+  /** Set true once `sealSession()` has run for this session. */
+  sealed = false;
 
   constructor(public cfg: ResponderSessionConfig) {}
 
@@ -104,13 +146,53 @@ export class ResponderSession {
     };
     if (decision) e.decision = decision;
     if (ruleCited) e.ruleCited = ruleCited;
-    appendEntry(this.cfg.trustDir, e);
+    appendEntry(stateRoot(this.cfg), e);
+  }
+
+  private sessionDir(): string {
+    return join(stateRoot(this.cfg), "sessions", this.id);
+  }
+
+  private aliasesPath(): string {
+    return join(this.sessionDir(), "aliases.md");
+  }
+
+  private async maybeSeal(): Promise<void> {
+    if (this.sealed) return;
+    if (!this.cfg.redaction) return;
+    try {
+      await sealSession({
+        aliasesPath: this.aliasesPath(),
+        auditRoot:
+          this.cfg.redaction.auditRoot ?? join(stateRoot(this.cfg), "audit"),
+        recipientsPath: this.cfg.redaction.recipientsPath,
+        sessionId: this.id,
+        ...(this.cfg.redaction.ageBin ? { ageBin: this.cfg.redaction.ageBin } : {}),
+      });
+      this.sealed = true;
+    } catch (err) {
+      // Failure to seal is logged but doesn't tear down the session — the
+      // operator gets the plaintext aliases.md still on disk and a kill-file
+      // is left behind for the watchdog to notice.
+      this.log(
+        "internal",
+        "close",
+        "seal failed — plaintext aliases.md left on disk",
+        (err as Error).message,
+      );
+    }
   }
 
   private async handleOpen(inbound: WireMessage): Promise<SessionStepResult> {
     // Parse OPEN. Body should be like `OPEN as=<slug>`. Frame is the intent.
+    // Permissionless endpoints accept a fallback when partners forget the
+    // body — they get `as=guest` automatically.
     const m = inbound.body.match(/^OPEN\s+as=([\w.@:-]+)/i);
-    if (!m) {
+    if (m) {
+      this.initiatorClaim = m[1]!;
+    } else if (this.cfg.skipHandshake) {
+      this.initiatorClaim = "guest";
+    } else {
       return {
         done: true,
         outbound: encResponse(
@@ -119,12 +201,40 @@ export class ResponderSession {
         ),
       };
     }
-    this.initiatorClaim = m[1]!;
-    this.intent = inbound.frame;
-    this.peerRecord = loadPeer(this.cfg.trustDir, this.initiatorClaim);
+    this.intent = inbound.frame || inbound.body;
+    this.peerRecord = loadPeer(stateRoot(this.cfg), this.initiatorClaim);
     this.log("in", "open", `OPEN from ${this.initiatorClaim}`, this.intent);
 
-    // Move to handshake; emit the first probe.
+    // Skip-handshake mode: go straight to GRANT without identity probes.
+    // The contract is what bounds the session, not the identity check.
+    if (this.cfg.skipHandshake) {
+      this.phase = "grant";
+      this.handshakeConfidence = 0;
+      const { contract, raw } = await generateContract({
+        guardian: this.cfg.guardian,
+        responderManifest: this.cfg.manifest,
+        initiatorSlug: this.initiatorClaim,
+        intent: this.intent,
+        handshakeNotes: "skipped (permissionless endpoint)",
+        sessionId: this.id,
+      });
+      this.contract = contract;
+      this.contractRaw = raw;
+      const sd = this.sessionDir();
+      mkdirSync(sd, { recursive: true });
+      writeFileSync(join(sd, "contract.md"), raw, "utf8");
+      this.log("internal", "grant", "contract written (no handshake)", contract.scope, "allow", "contract:permissionless");
+      this.log("out", "grant", "contract sent", contract.scope);
+      return {
+        done: false,
+        outbound: encResponse(
+          "Permissionless endpoint — no handshake. Here is the session contract.",
+          raw,
+        ),
+      };
+    }
+
+    // Otherwise: move to handshake; emit the first probe.
     this.phase = "handshake";
     return await this.emitProbe();
   }
@@ -186,7 +296,7 @@ export class ResponderSession {
       this.log("internal", "grant", "contract written", contract.scope, "allow", "contract:write");
 
       // Persist on disk.
-      const sessionDir = join(this.cfg.trustDir, "sessions", this.id);
+      const sessionDir = this.sessionDir();
       mkdirSync(sessionDir, { recursive: true });
       writeFileSync(join(sessionDir, "contract.md"), raw, "utf8");
 
@@ -202,7 +312,7 @@ export class ResponderSession {
 
     if (this.handshakeConfidence <= cfg.abortThreshold || this.handshakeRound >= cfg.maxRounds) {
       this.phase = "close";
-      addStrike(this.cfg.trustDir, this.initiatorClaim, `handshake failed (conf ${this.handshakeConfidence.toFixed(2)})`);
+      addStrike(stateRoot(this.cfg), this.initiatorClaim, `handshake failed (conf ${this.handshakeConfidence.toFixed(2)})`);
       this.log(
         "internal",
         "close",
@@ -240,7 +350,8 @@ export class ResponderSession {
       this.log("in", "work", inbound.frame || "close requested", "CLOSE");
       this.phase = "close";
       this.log("internal", "close", `session ended; drift=${driftLabel(this.drift.lastDriftAction)}`, `${this.drift.totalCommands} commands, ${this.drift.driftCount} drifted`);
-      recordSuccessfulInteraction(this.cfg.trustDir, this.initiatorClaim);
+      recordSuccessfulInteraction(stateRoot(this.cfg), this.initiatorClaim);
+      await this.maybeSeal();
       return {
         done: true,
         outbound: encResponse("Session closed. Thanks.", "BYE"),
@@ -254,6 +365,7 @@ export class ResponderSession {
     }
 
     this.log("in", "work", inbound.frame, inbound.body);
+    this.turnNumber += 1;
 
     const { judgment, driftAction } = await judgeCommand({
       guardian: this.cfg.guardian,
@@ -268,6 +380,8 @@ export class ResponderSession {
     let outBody: string;
     let decisionTag: HistoryEntry["decision"];
     let terminate = false;
+    /** Whether outBody contains real exec output that must go through the shield. */
+    let needsRedaction = false;
 
     if (driftAction >= 3) {
       outFrame = "Drift threshold exceeded. Closing the session.";
@@ -280,35 +394,103 @@ export class ResponderSession {
       }`;
       outBody = judgment.response ?? judgment.counterOffer ?? judgment.denyReason ?? "";
       decisionTag = "drift-warn";
+      needsRedaction = judgment.decision === "allow";
     } else if (driftAction === 1) {
       outFrame = `Soft challenge: that looked outside what we agreed. What were you trying to accomplish?${
         judgment.decision === "allow" ? " I'll answer this one anyway." : ""
       }`;
       outBody = judgment.response ?? judgment.counterOffer ?? judgment.denyReason ?? "";
       decisionTag = "drift-challenge";
+      needsRedaction = judgment.decision === "allow";
     } else if (judgment.decision === "allow") {
-      outFrame = "Allowed.";
-      outBody = judgment.response!;
+      // Route to the actual exec layer based on the literal command shape.
+      // SELECT / WITH → prod-db; whitelisted shell verb → executeShell; else
+      // fall back to the guardian's natural-language payload.
+      const cmd = inbound.body;
+      if (looksLikeSql(cmd) && this.cfg.prodDb) {
+        const { rows, rejection } = this.cfg.prodDb.query(cmd);
+        outBody = rejection ? `db rejected: ${rejection}` : formatRows(rows!);
+        outFrame = rejection ? "Query rejected." : "Query executed.";
+      } else if (looksLikeSql(cmd) && !this.cfg.prodDb) {
+        outBody = "this endpoint does not expose a production DB";
+        outFrame = "No DB available.";
+      } else if (looksLikeShell(cmd)) {
+        const { result, rejection } = await executeShell(cmd, {
+          ...(this.cfg.shellCwd ? { cwd: this.cfg.shellCwd } : {}),
+        });
+        outBody = rejection ? `shell rejected: ${rejection}` : formatExecResult(result!);
+        outFrame = rejection ? "Shell command rejected." : "Shell command executed.";
+      } else {
+        outBody = judgment.response ?? "";
+        outFrame = "Allowed (natural-language answer).";
+      }
       decisionTag = "allow";
+      needsRedaction = true;
     } else if (judgment.decision === "counter-offer") {
       outFrame = "I can't fulfill that exactly. Counter-offer:";
       outBody = judgment.counterOffer!;
       decisionTag = "counter-offer";
+      needsRedaction = true;
     } else {
       outFrame = "Refused.";
       outBody = judgment.denyReason ?? "I can't share that.";
       decisionTag = "deny";
     }
 
+    // PII shield — rewrite the outBody if redaction is configured. Skip for
+    // deny / terminate (those have no PII to leak by design).
+    if (needsRedaction && this.cfg.redaction && !terminate) {
+      try {
+        const ctx: RedactionContext = {
+          aliasesPath: this.aliasesPath(),
+          sessionId: this.id,
+          turnNumber: this.turnNumber,
+          guardian: this.cfg.guardian,
+        };
+        const r = await redact(outBody, ctx);
+        outBody = r.redactedBody;
+      } catch (err) {
+        // Shield failure must FAIL CLOSED — refuse the response rather than
+        // leak raw PII.
+        this.log(
+          "internal",
+          "work",
+          "PII shield failed — substituting refusal",
+          (err as Error).message,
+          "deny",
+          "redaction:fail-closed",
+        );
+        outFrame = "Refused (PII shield error — failing closed).";
+        outBody = "the PII shield encountered an error; this response is withheld";
+        decisionTag = "deny";
+      }
+    }
+
     this.log("out", "work", outFrame, outBody, decisionTag, judgment.ruleCited);
 
     if (terminate) {
       this.phase = "close";
-      addStrike(this.cfg.trustDir, this.initiatorClaim, "terminated for sustained drift");
+      addStrike(stateRoot(this.cfg), this.initiatorClaim, "terminated for sustained drift");
+      await this.maybeSeal();
       return { done: true, outbound: encResponse(outFrame, outBody) };
     }
 
     return { done: false, outbound: encResponse(outFrame, outBody) };
+  }
+
+  /**
+   * Force-close from the daemon (e.g., POST /sessions/:id/close, or the
+   * watchdog wrote a .kill file). Idempotent. Returns BYE outbound or null
+   * if the session was already finished.
+   */
+  async forceClose(reason: string): Promise<SessionStepResult> {
+    if (this.phase === "close") {
+      return { done: true };
+    }
+    this.phase = "close";
+    this.log("internal", "close", `force-closed: ${reason}`, "");
+    await this.maybeSeal();
+    return { done: true, outbound: encResponse(`Session force-closed: ${reason}`, "BYE") };
   }
 
   /** Snapshot state for tests / debugging. */

@@ -48,23 +48,19 @@ export function decode(text: string): WireMessage {
   const before = normalized.slice(0, idx).trim();
   const after = normalized.slice(idx + DELIM.trim().length).trim();
 
+  // FRAME label is optional — if the first half has no `FRAME:` prefix, the
+  // entire first half IS the frame text. Lenient v0.2 behavior; v0.1 always
+  // produced the labeled form, so this stays backward-compatible.
   const frameMatch = before.match(/^FRAME:\s*([\s\S]*)$/);
-  if (!frameMatch) {
-    throw new Error("Wire message missing `FRAME:` label");
-  }
-  const frame = frameMatch[1]!.trim();
+  const frame = (frameMatch ? frameMatch[1]! : before).trim();
 
-  // Body label: COMMAND or RESPONSE.
+  // Body label: explicit COMMAND or RESPONSE, OR raw body (defaults to
+  // command — the daemon only ever receives commands from initiators).
   const cmdMatch = after.match(/^COMMAND:\s*([\s\S]*)$/);
   const respMatch = after.match(/^RESPONSE:\s*([\s\S]*)$/);
-
-  if (cmdMatch) {
-    return { frame, body: cmdMatch[1]!.trim(), bodyKind: "command" };
-  }
-  if (respMatch) {
-    return { frame, body: respMatch[1]!.trim(), bodyKind: "response" };
-  }
-  throw new Error("Wire message missing `COMMAND:` or `RESPONSE:` label");
+  if (cmdMatch) return { frame, body: cmdMatch[1]!.trim(), bodyKind: "command" };
+  if (respMatch) return { frame, body: respMatch[1]!.trim(), bodyKind: "response" };
+  return { frame, body: after, bodyKind: "command" };
 }
 
 /** Convenience helper: build an outbound command turn. */

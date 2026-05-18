@@ -22,8 +22,9 @@ import { loadManifest } from "./trust-md.js";
 import { ResponderSession, type ResponderSessionConfig } from "./session.js";
 import { Guardian } from "./guardian.js";
 import { ensureLog } from "./history.js";
+import { tryOpenProdDbFromEnv, type ProdDb } from "./prod-db.js";
 
-interface DaemonOptions {
+export interface DaemonOptions {
   /** Single-persona mode: path to the persona's identity dir (containing .trust/). */
   root?: string;
   /** Multi-persona mode: path to a parent dir of persona folders. */
@@ -32,6 +33,20 @@ interface DaemonOptions {
   host?: string;
   /** Use a stub guardian that returns canned responses (for tests / dev). */
   stubGuardian?: boolean;
+  /** Where runtime state goes (sessions/, audit/). Defaults to <trustDir>. */
+  stateDir?: string;
+  /** When true, OPEN → GRANT directly, no handshake. */
+  skipHandshake?: boolean;
+  /** When set, the WORK loop redacts every response and seals aliases.md on close. */
+  redaction?: {
+    recipientsPath: string;
+    auditRoot?: string;
+    ageBin?: string;
+  };
+  /** Optional ProdDb instance for SQL turns. */
+  prodDb?: ProdDb;
+  /** Working directory for shell exec. */
+  shellCwd?: string;
 }
 
 interface PersonaCtx {
@@ -40,6 +55,14 @@ interface PersonaCtx {
   manifest: ReturnType<typeof loadManifest>;
   guardian: Guardian;
   sessions: Map<string, ResponderSession>;
+  /** Cached protocol.md text, served at GET /. */
+  protocolDoc?: string;
+  /** Per-persona overrides for session config (state-dir, redaction, etc). */
+  stateDir?: string;
+  skipHandshake?: boolean;
+  redaction?: DaemonOptions["redaction"];
+  prodDb?: ProdDb;
+  shellCwd?: string;
 }
 
 export function startDaemon(opts: DaemonOptions = {}): { close: () => void; port: number } {
@@ -48,21 +71,37 @@ export function startDaemon(opts: DaemonOptions = {}): { close: () => void; port
 
   const personas = new Map<string, PersonaCtx>();
 
+  // Resolve the prod DB once at boot (if env vars are set). Shared across
+  // personas — there's only one Claims Genie DB.
+  const sharedProdDb = opts.prodDb ?? tryOpenProdDbFromEnv() ?? undefined;
+
   const loadPersona = (identityDir: string, slug: string) => {
     const trustDir = join(identityDir, ".trust");
     if (!existsSync(trustDir)) {
       throw new Error(`No .trust/ folder at ${identityDir}`);
     }
-    ensureLog(trustDir);
+    const stateDir = opts.stateDir ?? trustDir;
+    ensureLog(stateDir);
     const manifest = loadManifest(trustDir);
     const guardian = new Guardian();
-    personas.set(slug, {
+    const protocolPath = join(trustDir, "protocol.md");
+    const protocolDoc = existsSync(protocolPath)
+      ? readFileSync(protocolPath, "utf8")
+      : undefined;
+    const ctx: PersonaCtx = {
       slug,
       trustDir,
       manifest,
       guardian,
       sessions: new Map(),
-    });
+    };
+    if (protocolDoc) ctx.protocolDoc = protocolDoc;
+    if (stateDir !== trustDir) ctx.stateDir = stateDir;
+    if (opts.skipHandshake) ctx.skipHandshake = true;
+    if (opts.redaction) ctx.redaction = opts.redaction;
+    if (sharedProdDb) ctx.prodDb = sharedProdDb;
+    if (opts.shellCwd) ctx.shellCwd = opts.shellCwd;
+    personas.set(slug, ctx);
   };
 
   if (opts.root) {
@@ -148,11 +187,17 @@ async function handlePersona(
   method: string,
   path: string,
 ) {
+  // GET / and GET /protocol.md both serve the self-describing protocol doc.
+  // Fall back to trust.md if no protocol.md exists.
+  if (method === "GET" && (path === "/" || path === "/protocol.md")) {
+    const doc = ctx.protocolDoc ?? ctx.manifest.raw;
+    return markdown(res, 200, doc);
+  }
   if (method === "GET" && path === "/trust.md") {
-    return text(res, 200, ctx.manifest.raw);
+    return markdown(res, 200, ctx.manifest.raw);
   }
   if (method === "GET" && path === "/history.log") {
-    const logPath = join(ctx.trustDir, "history.log");
+    const logPath = join(ctx.stateDir ?? ctx.trustDir, "history.log");
     if (!existsSync(logPath)) return text(res, 200, "");
     const buf = readFileSync(logPath, "utf8");
     // Truncate to last 64 KB to avoid massive responses.
@@ -167,6 +212,11 @@ async function handlePersona(
       manifest: ctx.manifest,
       guardian: ctx.guardian,
     };
+    if (ctx.stateDir) cfg.stateDir = ctx.stateDir;
+    if (ctx.skipHandshake) cfg.skipHandshake = true;
+    if (ctx.redaction) cfg.redaction = ctx.redaction;
+    if (ctx.prodDb) cfg.prodDb = ctx.prodDb;
+    if (ctx.shellCwd) cfg.shellCwd = ctx.shellCwd;
     const session = new ResponderSession(cfg);
     ctx.sessions.set(session.id, session);
     const result = await session.step(body);
@@ -189,12 +239,31 @@ async function handlePersona(
     return text(res, 200, result.outbound ?? "");
   }
 
+  const closeMatch = path.match(/^\/sessions\/([^/]+)\/close$/);
+  if (method === "POST" && closeMatch) {
+    const id = closeMatch[1]!;
+    const session = ctx.sessions.get(id);
+    if (!session) return text(res, 404, `unknown session: ${id}`);
+    const reason = (await readBody(req)).trim() || "operator close";
+    const result = await session.forceClose(reason);
+    ctx.sessions.delete(id);
+    res.setHeader("x-session-id", id);
+    res.setHeader("x-session-done", "true");
+    return text(res, 200, result.outbound ?? "BYE");
+  }
+
   return text(res, 404, `not found: ${method} ${path}`);
 }
 
 function text(res: ServerResponse, status: number, body: string) {
   res.statusCode = status;
   res.setHeader("content-type", "text/plain; charset=utf-8");
+  res.end(body);
+}
+
+function markdown(res: ServerResponse, status: number, body: string) {
+  res.statusCode = status;
+  res.setHeader("content-type", "text/markdown; charset=utf-8");
   res.end(body);
 }
 

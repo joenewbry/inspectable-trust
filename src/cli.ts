@@ -20,6 +20,7 @@ import { loadPeer, effectiveStrikes } from "./peers.js";
 import { startDaemon, startClientSession } from "./daemon.js";
 import { Guardian } from "./guardian.js";
 import { InitiatorSession } from "./session.js";
+import { unsealSession, checkAgeAvailable } from "./seal.js";
 
 async function main() {
   const args = argv.slice(2);
@@ -38,6 +39,8 @@ async function main() {
       return cmdPeer(args[1]);
     case "verify":
       return cmdVerify();
+    case "unseal":
+      return await cmdUnseal(args.slice(1));
     case "help":
     case "--help":
     case "-h":
@@ -72,6 +75,15 @@ function help() {
   trust serve --multi <dir>        Start daemon serving every <dir>/*/.trust/.
   trust serve --port <n>           Bind to port <n>. Default 8500.
   trust serve --host <h>           Bind to host. Default 127.0.0.1.
+  trust serve --state-dir <path>   Where session state goes. Default: <trustDir>.
+  trust serve --skip-handshake     Permissionless mode: OPEN → GRANT directly.
+  trust serve --recipients <path>  age recipients file. Turns on PII shield + seal.
+  trust serve --audit-root <path>  Where sealed aliases.md files land.
+  trust serve --shell-cwd <path>   Working dir for shell exec commands.
+
+  trust unseal <path-to-.age> [-i <identity>]
+                                   Decrypt a sealed aliases.md to stdout.
+                                   Default identity: ~/.trust/audit/identity.txt.
 
   trust ask <peer-url> "<intent>"  Open a session and walk through it.
                                    peer-url is http://host:port[/personas/<slug>].
@@ -117,12 +129,22 @@ function cmdServe(args: string[]) {
   let multi: string | undefined;
   let port = 8500;
   let host = "127.0.0.1";
+  let stateDir: string | undefined;
+  let skipHandshake = false;
+  let recipientsPath: string | undefined;
+  let auditRoot: string | undefined;
+  let shellCwd: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--multi") multi = args[++i];
     else if (a === "--port") port = Number(args[++i]);
-    else if (a === "--host") host = args[++i];
+    else if (a === "--host") host = args[++i]!;
+    else if (a === "--state-dir") stateDir = args[++i];
+    else if (a === "--skip-handshake") skipHandshake = true;
+    else if (a === "--recipients") recipientsPath = args[++i];
+    else if (a === "--audit-root") auditRoot = args[++i];
+    else if (a === "--shell-cwd") shellCwd = args[++i];
     else if (!a.startsWith("--")) root = a;
   }
 
@@ -135,9 +157,50 @@ function cmdServe(args: string[]) {
     root = id.identityDir;
   }
 
-  startDaemon({ root, multi, port, host });
+  const daemonOpts: Parameters<typeof startDaemon>[0] = { port, host };
+  if (root) daemonOpts.root = root;
+  if (multi) daemonOpts.multi = multi;
+  if (stateDir) daemonOpts.stateDir = stateDir;
+  if (skipHandshake) daemonOpts.skipHandshake = true;
+  if (shellCwd) daemonOpts.shellCwd = shellCwd;
+  if (recipientsPath) {
+    daemonOpts.redaction = { recipientsPath };
+    if (auditRoot) daemonOpts.redaction.auditRoot = auditRoot;
+  }
+
+  startDaemon(daemonOpts);
   // Keep the process alive.
   setInterval(() => {}, 1 << 30);
+}
+
+async function cmdUnseal(args: string[]) {
+  if (args.length === 0) {
+    stderr.write("usage: trust unseal <path-to-.age> [-i <identity>]\n");
+    exit(1);
+  }
+  let sealedPath = "";
+  let identityPath = join(homedir(), ".trust/audit/identity.txt");
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "-i" || a === "--identity") identityPath = args[++i]!;
+    else if (!a.startsWith("-")) sealedPath = a;
+  }
+  if (!sealedPath) {
+    stderr.write("missing path to sealed file\n");
+    exit(1);
+  }
+  if (!(await checkAgeAvailable())) {
+    stderr.write("age binary not found on PATH; install it (brew install age / apt install age)\n");
+    exit(1);
+  }
+  try {
+    const plain = await unsealSession({ sealedPath: resolve(sealedPath), identityPath: resolve(identityPath) });
+    stdout.write(plain);
+    if (!plain.endsWith("\n")) stdout.write("\n");
+  } catch (err) {
+    stderr.write(`unseal failed: ${(err as Error).message}\n`);
+    exit(1);
+  }
 }
 
 async function cmdAsk(args: string[]) {
